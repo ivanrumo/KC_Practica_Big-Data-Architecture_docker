@@ -1,10 +1,16 @@
 #!/bin/bash
 
+# create base hadoop cluster docker image
+docker build -f docker/base/Dockerfile -t irm/hadoop-cluster-base:latest docker/base
+
+# create master node hadoop cluster docker image
+docker build -f docker/master/Dockerfile -t irm/hadoop-cluster-master:latest docker/master
+
+
 # the default node number is 3
 N=${1:-3}
 
-docker network create --driver=bridge hadoop
-
+docker network create --driver=bridge hadoop &> /dev/null
 
 # start hadoop slave container
 i=1
