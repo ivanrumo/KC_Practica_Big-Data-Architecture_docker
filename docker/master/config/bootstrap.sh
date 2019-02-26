@@ -25,7 +25,7 @@ $HIVE_HOME/bin/schematool -dbType derby -initSchema
 $HADOOP_HOME/bin/hadoop jar /usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.7.jar wordcount input_answers output
 
 # launch hive job
-$HIVE_HOME/bin/hive -f /data/hive_job.sql
+$HIVE_HOME/bin/hive -f /root/hive_job.sql
 
 # copy results from hdfs to local
 $HADOOP_HOME/bin/hdfs dfs -copyToLocal /user/root/users_most_actives /data

@@ -18,6 +18,9 @@ ADD config/bootstrap.sh /etc/bootstrap.sh
 RUN chown root:root /etc/bootstrap.sh
 RUN chmod 700 /etc/bootstrap.sh
 
+ADD config/hive_job.sql /root/hive_job.sql
+
+
 ENV BOOTSTRAP /etc/bootstrap.sh
 
 VOLUME /data
