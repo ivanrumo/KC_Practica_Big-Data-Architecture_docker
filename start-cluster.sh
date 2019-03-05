@@ -1,13 +1,8 @@
 #!/bin/bash
 
 # provisioning data
-#python3 -m venv .venv
-#rm data/user_ids_names &> /dev/null
-#source src/.venv/bin/activate
-#python src/provisioning_data.py
-#10022* vim requirements.txt
-#10023* pip install requests
-
+rm data/user_ids_names &> /dev/null
+python src/provisioning_data.py
 
 sudo rm -rf data/locations_most_actives data/users_most_actives
 
