@@ -1,11 +1,18 @@
 #!/bin/bash
 
+# provisioning data
+rm data/user_ids_names &> /dev/null
+python src/provisioning_data.py
+
+sudo rm -rf data/locations_most_actives data/users_most_actives
+
 # create base hadoop cluster docker image
 docker build -f docker/base/Dockerfile -t irm/hadoop-cluster-base:latest docker/base
 
 # create master node hadoop cluster docker image
 docker build -f docker/master/Dockerfile -t irm/hadoop-cluster-master:latest docker/master
 
+echo "Starting cluster..."
 
 # the default node number is 3
 N=${1:-3}
@@ -40,7 +47,24 @@ docker run -itd \
 				-v $PWD/data:/data \
                 irm/hadoop-cluster-master
 
-
-
 # get into hadoop master container
-docker exec -it hadoop-master bash
+#docker exec -it hadoop-master bash
+
+echo "Making jobs. Please wait"
+
+while [ ! -d data/locations_most_actives ]
+do
+  sleep 10
+  #echo "Waiting..."
+done
+
+echo "Stoping cluster..."
+docker stop hadoop-master
+
+i=1
+while [ $i -lt $N ]
+do
+	docker stop hadoop-slave$i
+	
+	i=$(( $i + 1 ))
+done 
