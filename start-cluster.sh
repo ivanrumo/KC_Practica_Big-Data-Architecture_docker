@@ -1,10 +1,11 @@
 #!/bin/bash
 
 # provisioning data
-rm data/user_ids_names &> /dev/null
-python src/provisioning_data.py
-
-sudo rm -rf data/locations_most_actives data/users_most_actives
+#############3 descomentar
+#rm data/user_ids_names &> /dev/null    
+#python src/provisioning_data.py
+#sudo rm -rf data/locations_most_actives data/users_most_actives
+#############3 descomentar
 
 # create base hadoop cluster docker image
 docker build -f docker/base/Dockerfile -t irm/hadoop-cluster-base:latest docker/base
@@ -42,14 +43,15 @@ docker run -itd \
                 --net=hadoop \
                 -p 50070:50070 \
                 -p 8088:8088 \
+								-p 18080:18080 \
                 --name hadoop-master \
                 --hostname hadoop-master \
-				-v $PWD/data:/data \
+								-v $PWD/data:/data \
                 irm/hadoop-cluster-master
 
 # get into hadoop master container
 #docker exec -it hadoop-master bash
-
+exit
 echo "Making jobs. Please wait"
 
 while [ ! -d data/locations_most_actives ]

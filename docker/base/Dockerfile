@@ -15,6 +15,8 @@ RUN wget http://apache.rediris.es/hadoop/common/hadoop-2.7.7/hadoop-2.7.7.tar.gz
 # set environment variable
 ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 
 ENV HADOOP_HOME=/usr/local/hadoop 
+ENV HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop/
+ENV YARN_CONF_DIR=/usr/local/hadoop/etc/hadoop/
 ENV PATH=$PATH:/usr/local/hadoop/bin:/usr/local/hadoop/sbin 
 
 # ssh without key
