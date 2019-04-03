@@ -2,9 +2,9 @@
 
 # provisioning data
 #############3 descomentar
-#rm data/user_ids_names &> /dev/null    
-#python src/provisioning_data.py
-#sudo rm -rf data/locations_most_actives data/users_most_actives
+rm data/user_ids_names &> /dev/null    
+python src/provisioning_data.py
+sudo rm -rf data/locations_most_actives data/users_most_actives
 #############3 descomentar
 
 # create base hadoop cluster docker image

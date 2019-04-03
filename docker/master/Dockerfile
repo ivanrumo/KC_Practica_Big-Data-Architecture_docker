@@ -16,6 +16,8 @@ ENV LD_LIBRARY_PATH=/usr/local/hadoop/lib/native:$LD_LIBRARY_PATH
 ADD config/spark-defaults.conf /usr/local/spark/conf
 RUN chown root:root /usr/local/spark/conf/spark-defaults.conf
 
+ADD bin/stackanswer_2.12-0.1.jar /usr/local/spark/jars
+
 ADD config/bootstrap.sh /etc/bootstrap.sh
 RUN chown root:root /etc/bootstrap.sh
 RUN chmod 700 /etc/bootstrap.sh
