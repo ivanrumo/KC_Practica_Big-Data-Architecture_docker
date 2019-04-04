@@ -19,7 +19,7 @@ $SPARK_HOME/sbin/start-history-server.sh
 # run the spark job
 spark-submit --deploy-mode cluster --master yarn \
                --class StackAnswer \
-               $SPARK_HOME/jars/stackanswer_2.12-0.1.jar
+               $SPARK_HOME/jars/stackanswer_2.12-1.0.jar
 
 # copy results from hdfs to local
 $HADOOP_HOME/bin/hdfs dfs -copyToLocal /user/root/users_most_actives /data
