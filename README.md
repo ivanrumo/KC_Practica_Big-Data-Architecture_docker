@@ -1,167 +1,192 @@
-Continuando con el [artículo anterior](https://www.writecode.es/2019-02-25-cluster_hadoop_docker/), en esta ocasión vamos a añadir a nuestro cluster [Hive](https://hive.apache.org/).
+Seguimos la serie de artículos de nuestro cluster de Hadoop. En este caso voy a integrar [Apache Spark](https://spark.apache.org/) en el cluster y voy a incluir un script en Scala que usa el framewrok de Spark para realizar las mismas operaciones que realizamos con Hive en el artículo anterior. 
 
-Apache Hive sirve para proporcionar agrupación, consulta y análisis de datos. Me resultó curioso descubrir que inicialmente fue un desarrollo de Facebook. Explicándolo de una manera sencilla, Hive nos permite realizar consultas sobre grandes ficheros o conjuntos de datos que se encuentren en un filesystem HDFS de Hadoop. Bueno, también permite trabajar con ficheros en otros sistemas, como por ejemplo, Amazon S3.
-Para realizar estos análisis, Hive nos proporciona HiveQL que está basado en SQL. Como vamos a ver más adelante, si controlas de SQL no vas a tener problemas con HiveQL.
+Recapitulando los anteriores artículos habíamos creado un cluster Hadoop para procesar unos ficheros. Creamos un Dockerfile para generar una imagen base. Con esta imagen creamos nos nodos slave del cluster. También creamos otro Dockerfile que se basa en la imagen base y con el que creamos la imagen del nodo master del cluster. En un primer lugar creamos un cluster de Hadoop, después incluimos hive y ahora vamos a incluir Spark. 
 
-Todo los ficheros de esta serie de artículos lo estoy dejando en [este repositorio de Github](https://github.com/ivanrumo/KC_Practica_Big-Data-Architecture_docker). Cada post tiene su propia rama. Para este artículo he creado una rama que se llama [install_hive](https://github.com/ivanrumo/KC_Practica_Big-Data-Architecture_docker/tree/install_hive). Si bajáis con contenido de esa rama tendréis todo listo para probarlo.
+Como en artículo anterior nos modificamos los ficheros ya existentes y los cambios realizado los dejaré subidos [en una rama](https://github.com/ivanrumo/KC_Practica_Big-Data-Architecture_docker/tree/install_spark) del repositorio[ de Github](https://github.com/ivanrumo/KC_Practica_Big-Data-Architecture_docker) de los artículos.
 
-Lo que vamos ha hacer es modificar el cluster Hadoop que hicimos para incluir Hive. Luego vamos a generar un par de ficheritos extrayendo datos [del API de stackexchange](https://api.stackexchange.com/). Sobre uno de los ficheros vamos a ejecutar el típico ejemplo de wordcount con MapReduce que incorpora Hadoop y después vamos a lanzar un pequeño Jod de Hive.
+Empezamos modificando el Dockerfile de la imagen base. Se encuentra en la ruta docker/base/Dockerfile. Incluimos dos variables de entorno necesarias para que Spark encuentre las configuraciones de Hadoop y Yarn y pueda funcionar correctamente.
 
-Realmente con el volumen de datos que estamos manejando, usar un cluster Hadoop es matar moscas a cañonazos. Me estoy basando en la práctica que realicé en su día donde lo que se buscaba estaba más orientado al tema de arquitectura que de procesamiento de datos. En el siguiente artículo que hablaré de Spark quiero hacer algo con datos más grandes.
-
-# Imágen del nodo master
-
-En el anterior artículo generábamos dos imágenes de Docker. Una para los nodos slave y otra para el nodo master. En el caso de los slaves los mantenemos como están, pero la imagen del master tenemos que modificarla para incluir Hive y algunos ficheros de configuración. Esta era la versión anterior del Docker file de la imagen master.
-
-```yml
-WORKDIR /root
-
-ADD config/bootstrap.sh /etc/bootstrap.sh
-RUN chown root:root /etc/bootstrap.sh
-RUN chmod 700 /etc/bootstrap.sh
-
-ENV BOOTSTRAP /etc/bootstrap.sh
-
-CMD ["/etc/bootstrap.sh", "-d"]
+```yaml
+ENV HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop/
+ENV YARN_CONF_DIR=/usr/local/hadoop/etc/hadoop/
 ```
 
-Y este sería nuestro nuevo fichero Dockerfile
+Así quedaría el fichero Dockerfile completo.
 
-```yml
+```yaml
+FROM ubuntu:16.04
+MAINTAINER irm
+
 WORKDIR /root
 
-RUN wget http://apache.rediris.es/hive/hive-2.3.4/apache-hive-2.3.4-bin.tar.gz && \
-    tar xvf apache-hive-2.3.4-bin.tar.gz && \
-    mv apache-hive-2.3.4-bin /usr/local/hive && \
-    rm apache-hive-2.3.4-bin.tar.gz
+# install openssh-server, openjdk and wget
+RUN apt-get update && apt-get install -y openssh-server openjdk-8-jdk wget
 
-ENV HIVE_HOME=/usr/local/hive
-ENV PATH=$PATH:/usr/local/hive/bin
+# install hadoop 2.7.2
+RUN wget http://apache.rediris.es/hadoop/common/hadoop-2.7.7/hadoop-2.7.7.tar.gz && \
+    tar -xzvf hadoop-2.7.7.tar.gz && \
+    mv hadoop-2.7.7 /usr/local/hadoop && \
+    rm hadoop-2.7.7.tar.gz
 
-ADD config/hive-site.xml /usr/local/hive/conf/hive-site.xml
-RUN chown root:root /usr/local/hive/conf/hive-site.xml
+# set environment variable
+ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 
+ENV HADOOP_HOME=/usr/local/hadoop 
+ENV HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop/
+ENV YARN_CONF_DIR=/usr/local/hadoop/etc/hadoop/
+ENV PATH=$PATH:/usr/local/hadoop/bin:/usr/local/hadoop/sbin 
+
+# ssh without key
+RUN ssh-keygen -t rsa -f ~/.ssh/id_rsa -P '' && \
+    cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+
+RUN mkdir -p ~/hdfs/namenode && \ 
+    mkdir -p ~/hdfs/datanode && \
+    mkdir $HADOOP_HOME/logs
+
+COPY config/* /tmp/
+
+RUN mv /tmp/ssh_config ~/.ssh/config && \
+    mv /tmp/hadoop-env.sh /usr/local/hadoop/etc/hadoop/hadoop-env.sh && \
+    mv /tmp/hdfs-site.xml $HADOOP_HOME/etc/hadoop/hdfs-site.xml && \ 
+    mv /tmp/core-site.xml $HADOOP_HOME/etc/hadoop/core-site.xml && \
+    mv /tmp/mapred-site.xml $HADOOP_HOME/etc/hadoop/mapred-site.xml && \
+    mv /tmp/yarn-site.xml $HADOOP_HOME/etc/hadoop/yarn-site.xml && \
+    mv /tmp/slaves $HADOOP_HOME/etc/hadoop/slaves && \
+    mv /tmp/start-hadoop.sh ~/start-hadoop.sh
+
+RUN chmod +x ~/start-hadoop.sh && \
+    chmod +x $HADOOP_HOME/sbin/start-dfs.sh && \
+    chmod +x $HADOOP_HOME/sbin/start-yarn.sh 
+
+# format namenode
+RUN /usr/local/hadoop/bin/hdfs namenode -format
+
+CMD [ "sh", "-c", "service ssh start; bash"]
+
+# Hdfs ports
+EXPOSE 9000 50010 50020 50070 50075 50090
+EXPOSE 9871 9870 9820 9869 9868 9867 9866 9865 9864
+# Mapred ports
+EXPOSE 19888
+#Yarn ports
+EXPOSE 8030 8031 8032 8033 8040 8042 8088 8188
+#Other ports
+EXPOSE 49707 2122
+```
+
+Ahora vamos con los cambios del Dockerfile de la imagen master. Quitamos la instalación de Hive e incluimos la instalación de Spark. Podríamos tener ambos a la vez en el mismo cluster, pero en este caso prefiero eliminar Hive del cluster ya que no lo vamos a utilizar:
+
+* Bajamos los binarios de Spark y lo descomprimimos.
+* Configuramos las variables de entorno
+* Añadimos el fichero de configuración de Spark
+* Añadimos el jar que va a ejecutar Spark para procesar los ficheros. Mas adelante vemos que hace exactamente.
+* Exponemos el puerto 18080 para poder acceder al Spark’s history server
+
+El fichero se encuentra en docker/master/Dockerfile
+
+```yaml
+RUN wget http://apache.rediris.es/spark/spark-2.4.0/spark-2.4.0-bin-hadoop2.7.tgz && \
+    tar -xvf spark-2.4.0-bin-hadoop2.7.tgz && \
+    mv spark-2.4.0-bin-hadoop2.7 /usr/local/spark && \
+    rm spark-2.4.0-bin-hadoop2.7.tgz
+
+ENV PATH=$PATH:/usr/local/spark/bin
+ENV SPARK_HOME=/usr/local/spark
+ENV LD_LIBRARY_PATH=/usr/local/hadoop/lib/native:$LD_LIBRARY_PATH
+
+ADD config/spark-defaults.conf /usr/local/spark/conf
+RUN chown root:root /usr/local/spark/conf/spark-defaults.conf
+
+ADD bin/stackanswer_2.12-1.0.jar /usr/local/spark/jars
+
+EXPOSE 18080
+```
+
+Así quedaría el fichero Dockerfile completo.
+
+```yaml
+FROM irm/hadoop-cluster-base
+MAINTAINER irm
+
+WORKDIR /root
+
+# install Spark
+RUN wget http://apache.rediris.es/spark/spark-2.4.2/spark-2.4.2-bin-hadoop2.7.tgz && \
+    tar -xvf spark-2.4.0-bin-hadoop2.7.tgz && \
+    mv spark-2.4.0-bin-hadoop2.7 /usr/local/spark && \
+    rm spark-2.4.0-bin-hadoop2.7.tgz
+
+ENV PATH=$PATH:/usr/local/spark/bin
+ENV SPARK_HOME=/usr/local/spark
+ENV LD_LIBRARY_PATH=/usr/local/hadoop/lib/native:$LD_LIBRARY_PATH
+
+ADD config/spark-defaults.conf /usr/local/spark/conf
+RUN chown root:root /usr/local/spark/conf/spark-defaults.conf
+
+ADD bin/stackanswer_2.12-0.1.jar /usr/local/spark/jars
 
 ADD config/bootstrap.sh /etc/bootstrap.sh
 RUN chown root:root /etc/bootstrap.sh
 RUN chmod 700 /etc/bootstrap.sh
-
-ADD config/hive_job.sql /root/hive_job.sql
 
 ENV BOOTSTRAP /etc/bootstrap.sh
 
 VOLUME /data
 
 CMD ["/etc/bootstrap.sh", "-d"]
+
+EXPOSE 18080
 ```
 
-Como se puede ver los cambios no son muchos.
+Seguimos con el fichero boostrap.sh. Este fichero se ejecuta al arrancar el contenedor del nodo master. En la versión anterior, este fichero configuraba directorios en el HDFS para hive, se inicializa el metastorage de Hive y ejecutaba un job de wordcount en Hadoop y un job de Hive. Todo eso se elimina en esta versión. 
 
-* Bajamos y descomprimimos el fichero con la versión 2.3.4 de Hive.
-* Creamos la variable de entorno HIVE_HOME apuntando a directorio donde hemos instalado Hive y también actualizamos la variable PATH para apuntar a la carpeta bin de Hive.
-* Añadimos el fichero hive-site.xml que veremos a continuación.
-* Añadimos el fichero hive_job.sql que contiene las sentencias HiveQL para procesar el contenido de los ficheros.
-* Y creamos un volumen al directorio /data que utilizaremos para intercambiar ficheros con el host.
+Los cambios que incluimos son:
 
-Con eso acabaríamos la parte de las imágenes de Docker.
+* Arrancar el proceso del Spark’s history server
+* Crear el directorio de losg para Spark en el HDFS
+* Lanzar el job de Spark que procesará los ficheros de entrada.
 
-## Configuración de Hive
+Este fichero se encuentra en la ruta docker/master/config/bootstrap.sh
 
-Este es el contenido del fichero hive-site.xml. En el configuramos el metasore de Hive. En este caso para simplificar lo vamos a dejar con Derby, pero se podría configurar con otro motor de base de datos. Es muy común configurarlo con PostgreSQL.
-
-```xml
-<?xml version="1.0"?>
-<configuration>
-   <property>
-      <name>javax.jdo.option.ConnectionURL</name>
-      <value>jdbc:derby:;databaseName=/usr/local/hive/metastore_db;create=true</value>
-      <description>JDBC connect string for a JDBC metastore.
-To use SSL to encrypt/authenticate the connection, provide database-specific SSL flag in the connection URL.
-For example, jdbc:postgresql://myhost/db?ssl=true for postgres database.</description>
-   </property>
-   <property>
-      <name>hive.metastore.warehouse.dir</name>
-      <value>/user/hive/warehouse</value>
-      <description>location of default database for the warehouse</description>
-   </property>
-   <property>
-      <name>hive.metastore.uris</name>
-      <value />
-      <description>Thrift URI for the remote metastore. Used by metastore client to connect to remote metastore.</description>
-   </property>
-   <property>
-      <name>javax.jdo.option.ConnectionDriverName</name>
-      <value>org.apache.derby.jdbc.EmbeddedDriver</value>
-      <description>Driver class name for a JDBC metastore</description>
-   </property>
-   <property>
-      <name>javax.jdo.PersistenceManagerFactoryClass</name>
-      <value>org.datanucleus.api.jdo.JDOPersistenceManagerFactory</value>
-      <description>class implementing the jdo persistence</description>
-   </property>
-</configuration>
-```
-
-## Script de lanzamiento del nodo master
-
-El script de inicio de la imagen docker también lo he modificado (bootstrap.sh). Anteriormente se iniciaba el DFS y el YANR del cluster. Ahora realiza algunas tareas mas:
-
-* Crea en HDFS las rutas de entrada y copia los ficheros.
-* Crean en HDFS las rutas que se han configurado en el fichero hive-site.xml.
-* Se inicializa el schema del metastorage de Hive
-* Se ejecuta un trabajo de MapReduce que realiza un wordcount del fichero input_answers.
-* Se ejecuta el job de Hive.
-* Copia los resultados de la ejecución del job Hive en /data para que puedan leerse y analizarse desde fuera del cluster de Docker.
-
-```sh
+```bash
 #!/bin/bash
+
 service ssh start
 
 # start cluster
 $HADOOP_HOME/sbin/start-dfs.sh
-$HADOOP_HOME/sbin/start-yarn.sh
+$HADOOP_HOME/sbin/start-yarn.sh 
 
 # create paths and give permissions
 $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root/input_answers
 $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root/input_names
 $HADOOP_HOME/bin/hdfs dfs -copyFromLocal /data/user_ids_answers input_answers
 $HADOOP_HOME/bin/hdfs dfs -copyFromLocal /data/user_ids_names input_names
+$HADOOP_HOME/bin/hdfs dfs -mkdir /spark-logs
 
-$HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/hive/warehouse
-$HADOOP_HOME/bin/hdfs dfs -mkdir /tmp
+# start spark history server
+$SPARK_HOME/sbin/start-history-server.sh
 
-$HADOOP_HOME/bin/hdfs dfs -chmod g+w /user/hive/warehouse
-$HADOOP_HOME/bin/hdfs dfs -chmod g+w /tmp
-
-# init hive metastorage
-$HIVE_HOME/bin/schematool -dbType derby -initSchema
-
-# launch wordcount job
-$HADOOP_HOME/bin/hadoop jar /usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.7.jar wordcount input_answers output
-
-# launch hive job
-$HIVE_HOME/bin/hive -f /root/hive_job.sql
+# run the spark job
+spark-submit --deploy-mode cluster --master yarn \
+               --class StackAnswer \
+               $SPARK_HOME/jars/stackanswer_2.12-0.1.jar
 
 # copy results from hdfs to local
 $HADOOP_HOME/bin/hdfs dfs -copyToLocal /user/root/users_most_actives /data
 $HADOOP_HOME/bin/hdfs dfs -copyToLocal /user/root/locations_most_actives /data
+
+bash
 ```
 
-## Script de lanzamiento de Cluster
-
-El script start-cluster.sh, al igual que en el artículo anterior, es que el hace que suceda toda la magia. Pero ahora realiza algunas acciones más:
-
-* Ejecuta el script de Python que extrae los datos del API de Stackexchange. Más adelante comento las acciones que realiza el scrip en mas detalle.
-* Al igual que hacía anteriormente, genera las imágenes de Docker, crea los contenedores de los nodos slave y del nodo master y los lanza.
-* Una vez lanzados espera a que se termine la ejecución de los jobs. Para ello espera hasta que exista la carpeta data/locations_most_actives que es donde se dejan los resultados del job de Hive.
-* Por último para los nodos del cluster.
+Es el turno del script que realiza toda la magia. En este caso, solo incluimos mapeo de puerto de history server cuando creamos el contenedor del nodo master. Este sería el fichero completo:
 
 ```bash
 #!/bin/bash
 
 # provisioning data
-rm data/user_ids_names &> /dev/null
+rm data/user_ids_names &> /dev/null    
 python src/provisioning_data.py
-
 sudo rm -rf data/locations_most_actives data/users_most_actives
 
 # create base hadoop cluster docker image
@@ -191,8 +216,6 @@ do
 	i=$(( $i + 1 ))
 done 
 
-
-
 # start hadoop master container
 docker rm -f hadoop-master &> /dev/null
 echo "start hadoop-master container..."
@@ -200,13 +223,11 @@ docker run -itd \
                 --net=hadoop \
                 -p 50070:50070 \
                 -p 8088:8088 \
+                -p 18080:18080 \
                 --name hadoop-master \
                 --hostname hadoop-master \
-				-v $PWD/data:/data \
+                -v $PWD/data:/data \
                 irm/hadoop-cluster-master
-
-# get into hadoop master container
-#docker exec -it hadoop-master bash
 
 echo "Making jobs. Please wait"
 
@@ -225,151 +246,145 @@ do
 	docker stop hadoop-slave$i
 	
 	i=$(( $i + 1 ))
-done 
+done
 ```
 
-## Script de Python
+Para que Spark funcione correctamente debemos incluir unos parámetros nuevos en el fichero de configuración de Yarn. 
+    
+El fichero está en la ruta docker/base/config/yarn-site.xml
 
-El script de Python necesita el paquete requests para realizar las llamadas al API de Stackexchange:
-
-```bash
-pip install requests
+```xml
+<?xml version="1.0"?>
+<configuration>
+    <property>
+        <name>yarn.nodemanager.aux-services</name>
+        <value>mapreduce_shuffle</value>
+    </property>
+    <property>
+        <name>yarn.nodemanager.aux-services.mapreduce_shuffle.class</name>
+        <value>org.apache.hadoop.mapred.ShuffleHandler</value>
+    </property>
+    <property>
+        <name>yarn.resourcemanager.hostname</name>
+        <value>hadoop-master</value>
+    </property>
+        <property>
+        <name>yarn.scheduler.maximum-allocation-mb</name>
+        <value>2048</value>
+    </property>
+    <property>
+        <name>yarn.nodemanager.pmem-check-enabled</name>
+        <value>false</value>
+    </property>
+    <property>
+        <name>yarn.nodemanager.vmem-check-enabled</name>
+        <value>false</value>
+    </property>
+</configuration>
 ```
 
-El script provisioning_data.py utiliza dos llamadas del API.
+A continuación el fichero de configuración de Spark. En el configuramos la memoria disponible para la ejecución de Spark. Recordar que Spark necesita mucha memoria. Bueno, dependiendo del volumen  de los conjuntos de datos que se vayan a procesar. Spark usa memoria para trabajar más rápido, por lo que es necesario asignar la memoria suficiente para que pueda funcionar correctamente. También se configuran las rutas de logs en HDFS y el puerto del history server.
 
-1. **answers**: Con esta endpoint obtenemos las respuestas realizadas a preguntas. La idea es obtener todas las respuestas realizadas para obtener los usuarios más activos ayudando a los demás. Para ello grabamos el nombre del usuario que ha realizado la respuesta en una línea del fichero **data/user_ids_answers**. Sobre este fichero se realizará posteriormente el proceso MapReduce de wordcount para obtener el número de respuestas que ha realizado cada usuario.
-2. **users**: Por cada usuario que hemos obtenido realizamos una llamada a este endpoint para obtener de cada usuario su user_id, display_name, reputation y location. Estos datos los grabamos separados por comas en el fichero **data/user_ids_names**. Este fichero se tratará en el Job de hive que se lanza en el cluster.
+El fichero de logs se encuentra en la ruta docker/master/config/spark-defaults.conf
+```yaml
+spark.master                      yarn
+spark.driver.memory               512m
+spark.yarn.am.memory              512m
+spark.executor.memory             512m
 
-```python
-import requests
-
-from datetime import datetime, timedelta
-import time
-import os
-
-# obtenemos la fecha de hace 1 dia
-d = datetime.today() - timedelta(days=1)
-
-fromdate = int(d.timestamp())
-
-url_base = "https://api.stackexchange.com/2.2/answers?&order=asc&sort=activity&site=stackoverflow&pagesize=100&fromdate=" + str(
-    fromdate)
-print(url_base)
-has_more = True
-pagina = 1
+spark.eventLog.enabled            true
+spark.eventLog.dir                hdfs://hadoop-master:9000/spark-logs
 
 
-with open('data/user_ids_answers', 'w') as f_user_ids_answers:
-    while (has_more):
-        url_request = url_base + "&page=" + str(pagina)
-        response = requests.get(url_request)
+spark.history.provider            org.apache.spark.deploy.history.FsHistoryProvider
+spark.history.fs.logDirectory     hdfs://hadoop-master:9000/spark-logs
+spark.history.fs.update.interval  10s
+spark.history.ui.port             18080
 
-        result = response.json()
-
-        if (result.get('error_id')):
-            print("Error: " + result.get('error_message'))
-            break;
-
-        for answer in result['items']:
-            owner = answer['owner']
-            if (owner.get('user_id')):  # algunas peticiones no traen el user_id
-                f_user_ids_answers.write(str(answer['owner']['user_id']) + "\n")
-                #print(str(answer['owner']['user_id']) + "\n")
-
-        print(end=".")
-        #print("request")
-
-        has_more = result['has_more']
-        pagina = pagina + 1
-        time.sleep(1)
-
-
-with open('data/user_ids_answers', 'r') as f_user_ids_answers:
-    # El API de stackexchange nos permite
-    # https://api.stackexchange.com/docs/users-by-ids
-
-    i = 0
-    users_url = ""
-    for user_id in f_user_ids_answers:
-        user_id = f_user_ids_answers.readline().rstrip()
-
-        if (i >= 100):
-            # quitamos el ultimo ; y hacemos la peticion para obtener los datos de los usuarios
-            users_url = users_url[:-1]
-            url = "https://api.stackexchange.com/2.2/users/" + users_url + "?pagesize=100&order=desc&sort=reputation&site=stackoverflow"
-            # print(url)
-            print(end=".")
-            response = requests.get(url)
-            result = response.json()
-
-            with open('data/user_ids_names', 'a') as f_user_ids_names:
-                if (result.get('error_id')):
-                    print("Error: " + result.get('error_message'))
-                else:
-                    for user in result['items']:
-                        user_id = user['user_id']
-                        name = user.get('display_name')
-                        reputation = user.get('reputation')
-                        location = user.get('location')
-                        f_user_ids_names.write(
-                            str(user_id) + "," + name + "," + str(reputation) + "," + str(location) + "\n")
-
-            i = 0
-            users_url = ""
-
-        users_url = users_url + str(user_id) + ";"
-        i = i + 1
 ```
 
-## El job de Hive
+Ahora es el turno del proceso de Scala que procesará los datos. Para trabajar con Scala he usado IntelliJ IDEA Community Edition con el plugin de Scala. En un futuro Post publicaré un tutorial para configurar el entorno de desarrollo con Scala, aunque haciendo un simple búsqueda hay mucho tutoriales. En src/StackAnswerScalaProject.zip he dejado el proyecto completo. 
 
-Como he comentado anteriormente, para el volumen de datos que se manejan en este artículo, montar un cluster de Hadoop es matar moscas a cañonazos. Pero para poder entrever el potencial del software nos vale. Ahora imagina que en vez de 200 KB de datos, los ficheros de entrada fueran de 200 GB o 200 TB. Un cluster de Hadoop nos permitiría repartir la carga de trabajo entre todos los nodos del cluster. Estos pequeños ficheros los procesa en pocos segundos, pero si fueran de ese tamaño nos llevaría mucho más tiempo procesarlos. Pues en vez de ejecutarlos en tu portátil imagina que te proporcionan cinco buenas máquinas en tu empresa para montar el cluster. El tiempo de procesamiento, al tener cinco buenas máquinas en el cluster, se reduciría bastante. Ahora imagina que en vez de tener el hiero en tu empresa te dan acceso a la nube de Amazon, Google o Microsoft y en vez de cinco nodos, el cluster puede tener cincuenta. El tiempo se reduciría bastante más. Así esta lo bueno de esto. Y cuando llegue a Spark que ejecuta este tipo de procesos más rápido todavía mejor.
+Este proceso realiza las mismas acciones que se realizaban en el [post anterior](https://www.writecode.es/2019-02-25-cluster_hadoop_docker/) con Hadoop y Hive, pero ahora unicamente con Scala sobre Spark.
 
-Dicho esto, este es el contenido del fichero hive_job.sql:
+```scala
+import java.io.File
 
-```sql
-CREATE TABLE IF NOT EXISTS users
-(user_id INT, name STRING, reputation INT, location STRING)
-row format delimited fields terminated by ',';
+import org.apache.spark.sql.types.{IntegerType, StringType, StructType}
+import org.apache.spark.sql.{SQLContext, SparkSession}
+import org.apache.spark.sql.functions._
 
-LOAD DATA INPATH '/user/root/input_names/user_ids_names' INTO TABLE users;
+object StackAnswer {
 
-CREATE TABLE IF NOT EXISTS user_answers
-(user_id INT, n_answers INT) row format delimited fields terminated by '\t';
 
-LOAD DATA INPATH '/user/root/output/*' INTO TABLE user_answers;
+  def main(args: Array[String]): Unit = {
+    val namesFile = "hdfs:///user/root/input_names/user_ids_names"
+    val answersFile = "hdfs:///user/root/input_answers/user_ids_answers"
+    val pathWordCount = "hdfs:///user/root/user_ids_answers_wordcount"
+    val pathUsersMostActives = "hdfs:///user/root/users_most_actives"
+    val pathLocaltionsMostActives = "hdfs:///user/root/locations_most_actives"
 
-CREATE EXTERNAL TABLE IF NOT EXISTS users_most_actives(
-user_id INT, name STRING, n_answers INT) 
-ROW FORMAT DELIMITED 
-FIELDS TERMINATED BY ',' 
-STORED AS TEXTFILE 
-LOCATION '/user/root/users_most_actives';
+    val spark = SparkSession
+      .builder
+      .appName("StackAnswer")
+      .getOrCreate()
 
-INSERT OVERWRITE TABLE users_most_actives SELECT DISTINCT users.user_id, users.name, user_answers.n_answers  
-FROM users JOIN user_answers ON users.user_id = user_answers.user_id  
-ORDER BY n_answers DESC;
+    // configuramos los logs para que solo muestre errores
+    import org.apache.log4j.{Level, Logger}
+    val rootLogger = Logger.getRootLogger()
+    rootLogger.setLevel(Level.ERROR)
 
-CREATE EXTERNAL TABLE IF NOT EXISTS localtions_most_actives( 
-location STRING, n_answers INT)
-ROW FORMAT DELIMITED
-FIELDS TERMINATED BY ','
-STORED AS TEXTFILE
-LOCATION '/user/root/locations_most_actives';
+    import spark.implicits._
 
-INSERT OVERWRITE TABLE localtions_most_actives SELECT location, SUM(user_answers.n_answers) TOTAL 
-FROM users JOIN user_answers ON users.user_id = user_answers.user_id  
-GROUP BY location
-ORDER BY TOTAL DESC;
+    // leemos el fichero con las respuestas y hacemos un count de los ids.
+    val readFileDF = spark.sparkContext.textFile(answersFile).toDF
+    val name_counts = readFileDF.groupBy("Value").count().orderBy($"count".desc)
+
+    val name_countsC = name_counts.coalesce(1)
+    name_countsC.write.csv(pathWordCount)
+
+    // leemos el fichero de con los nombres de los usuarios y sus localizaciones
+    val schemaNames = new StructType()
+      .add("user_id",     IntegerType,true)
+      .add("name",        StringType,true)
+      .add("reputation",  IntegerType, true)
+      .add("location",    StringType, true)
+
+    val userDataDF = spark.read
+      .option("sep", ",")
+      .option("header", false)
+      .schema(schemaNames)
+      .csv(namesFile)
+
+    // eliminamos las filas duplicadas
+    val userDataCleanedDF = userDataDF.dropDuplicates()
+
+    // hacemos un join de los datos
+    val dataUsersAnswersDF = userDataCleanedDF.join(name_counts, userDataCleanedDF("user_id") === name_counts("Value"), "inner").drop("Value")
+
+    val usersMostActivesDF = dataUsersAnswersDF.select($"user_id", $"name", $"count".as("n_answers")).coalesce(1)
+    usersMostActivesDF.write.csv(pathUsersMostActives)
+
+    val dataLocationsMostActivesDF = dataUsersAnswersDF
+      .groupBy("location")
+      .sum("count")
+      .select($"location", $"sum(count)".as("n_answres"))
+      .orderBy(desc("n_answres"))
+      .coalesce(1)
+    dataLocationsMostActivesDF.write.csv(pathLocaltionsMostActives)
+  }
+
+}
 ```
 
-Si tienen conocimientos de SQL no creo que te cueste mucho seguir la ejecución de este script.
+Dentro de IntelliJ generamos el fichero jar que usaremos para lanzar el trabajo de Spark. En el repositorio de GitHub el jar se encuentra en docker/master/bin/stackanswer_2.12-1.0.jar.
 
-* Primero creo las tablas users y user_answers. La primera la carga con los datos del fichero user_ids_names obtenido en el script de Python. La segunda se carga con los ficheros de salida del proceso de wordcount.
-* Luego se crea la tabla users_most_actives donde obtendremos los usuarios más activos. Esta es una tabla externa y los registros que se inserten en ella se grabaran el la ruta HDFS /user/root/users_most_actives.
-* A continuación insertamos los registros de esta tabla realizando una consulta sobre las tablas users y user_answers
-* Con la tabla localtions_most_actives realizamos un proceso similar. También es una tabla externa que se guardará en la ruta HDFS /user/root/locations_most_actives. En esta tabla vamos a guardar las localidades mas más respuestas realizadas. Al igual que con la otra tabla externa, los datos los obtenemos de las tablas users y user_answers.
+El proceso se lanzará automáticamente al ejecutar el cluster. En la siguiente imagen podemos la ejecución del trabajo de Spark en el Yarn de nuestro cluster hadoop
 
-Como se puede ver, a partir de unos ficheros obtenemos unos datos que pueden tener valor. A lo mejor para una empresa de recruiting realizar unos procesos similares, pero mucha más información podrían ser interesantes. Al final, en esto del Big Data, lo importante es tener muchos datos para luego tratarlos y analizarlos para obtener información de valor.
+![Hadoop console](/img/hadoop/consola_hadoop_job_spark.png)
 
+En esta imagen se puede ver timeline de la ejecución en el History server de Spark
+
+![History server](/img/hadoop/history_server_spark.png)
+
+Con esto estaría todo. Como hemos podido ver, teniendo un cluster Hadoop, incluir Spark para que ejecute trabajos dentro del cluster es bastante sencillo. Spark nos ofrece una velocidad de procesamiento muy superior a las operaciones de MapReduce de hadoop.

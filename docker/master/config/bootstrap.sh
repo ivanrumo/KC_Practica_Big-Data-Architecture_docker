@@ -11,21 +11,15 @@ $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root/input_answers
 $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root/input_names
 $HADOOP_HOME/bin/hdfs dfs -copyFromLocal /data/user_ids_answers input_answers
 $HADOOP_HOME/bin/hdfs dfs -copyFromLocal /data/user_ids_names input_names
+$HADOOP_HOME/bin/hdfs dfs -mkdir /spark-logs
 
-$HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/hive/warehouse
-$HADOOP_HOME/bin/hdfs dfs -mkdir /tmp
+# start spark history server
+$SPARK_HOME/sbin/start-history-server.sh
 
-$HADOOP_HOME/bin/hdfs dfs -chmod g+w /user/hive/warehouse
-$HADOOP_HOME/bin/hdfs dfs -chmod g+w /tmp
-
-# init hive metastorage
-$HIVE_HOME/bin/schematool -dbType derby -initSchema
-
-# launch wordcount job
-$HADOOP_HOME/bin/hadoop jar /usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.7.jar wordcount input_answers output
-
-# launch hive job
-$HIVE_HOME/bin/hive -f /root/hive_job.sql
+# run the spark job
+spark-submit --deploy-mode cluster --master yarn \
+               --class StackAnswer \
+               $SPARK_HOME/jars/stackanswer_2.12-1.0.jar
 
 # copy results from hdfs to local
 $HADOOP_HOME/bin/hdfs dfs -copyToLocal /user/root/users_most_actives /data

@@ -4,3 +4,6 @@ src/.venv
 /data/user_ids_answers
 /data/user_ids_names
 /data/users_most_actives/000000_0
+data/users_most_actives/_SUCCESS
+data/locations_most_actives/_SUCCESS
+prueba.sh

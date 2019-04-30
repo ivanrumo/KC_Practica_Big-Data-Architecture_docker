@@ -1,9 +1,8 @@
 #!/bin/bash
 
 # provisioning data
-rm data/user_ids_names &> /dev/null
-python src/provisioning_data.py
-
+#rm data/user_ids_names &> /dev/null    
+#python src/provisioning_data.py
 sudo rm -rf data/locations_most_actives data/users_most_actives
 
 # create base hadoop cluster docker image
@@ -23,12 +22,14 @@ docker network create --driver=bridge hadoop &> /dev/null
 i=1
 while [ $i -lt $N ]
 do
+	port=$(( $i + 8042 ))
 	docker rm -f hadoop-slave$i &> /dev/null
 	echo "start hadoop-slave$i container..."
 	docker run -itd \
 	                --net=hadoop \
 	                --name hadoop-slave$i \
 	                --hostname hadoop-slave$i \
+					-p $((port)):8042 \
 	                irm/hadoop-cluster-base
 	i=$(( $i + 1 ))
 done 
@@ -42,6 +43,7 @@ docker run -itd \
                 --net=hadoop \
                 -p 50070:50070 \
                 -p 8088:8088 \
+				-p 18080:18080 \
                 --name hadoop-master \
                 --hostname hadoop-master \
 				-v $PWD/data:/data \
