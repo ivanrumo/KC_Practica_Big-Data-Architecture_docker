@@ -1,10 +1,3 @@
----
-layout: post
-title: Creando un cluster de Hadoop y Spark con docker
-image: /img/hadoop/apachespark-scala.jpg
-tags: [hadoop, docker, cluster, big data, hive, spark, kafka]
----
-
 Seguimos la serie de artículos de nuestro cluster de Hadoop. En este caso voy a integrar [Apache Spark](https://spark.apache.org/) en el cluster y voy a incluir un script en Scala que usa el framewrok de Spark para realizar las mismas operaciones que realizamos con Hive en el artículo anterior. 
 
 Recapitulando los anteriores artículos habíamos creado un cluster Hadoop para procesar unos ficheros. Creamos un Dockerfile para generar una imagen base. Con esta imagen creamos nos nodos slave del cluster. También creamos otro Dockerfile que se basa en la imagen base y con el que creamos la imagen del nodo master del cluster. En un primer lugar creamos un cluster de Hadoop, después incluimos hive y ahora vamos a incluir Spark. 
