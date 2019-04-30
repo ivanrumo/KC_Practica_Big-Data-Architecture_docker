@@ -1,3 +1,5 @@
+# Creando un cluster de Hadoop y Spark con docker
+
 Seguimos la serie de artículos de nuestro cluster de Hadoop. En este caso voy a integrar [Apache Spark](https://spark.apache.org/) en el cluster y voy a incluir un script en Scala que usa el framewrok de Spark para realizar las mismas operaciones que realizamos con Hive en el artículo anterior. 
 
 Recapitulando los anteriores artículos habíamos creado un cluster Hadoop para procesar unos ficheros. Creamos un Dockerfile para generar una imagen base. Con esta imagen creamos nos nodos slave del cluster. También creamos otro Dockerfile que se basa en la imagen base y con el que creamos la imagen del nodo master del cluster. En un primer lugar creamos un cluster de Hadoop, después incluimos hive y ahora vamos a incluir Spark. 
@@ -381,10 +383,10 @@ Dentro de IntelliJ generamos el fichero jar que usaremos para lanzar el trabajo 
 
 El proceso se lanzará automáticamente al ejecutar el cluster. En la siguiente imagen podemos la ejecución del trabajo de Spark en el Yarn de nuestro cluster hadoop
 
-![Hadoop console](/img/hadoop/consola_hadoop_job_spark.png)
+![Hadoop console](https://www.writecode.es/img/hadoop/consola_hadoop_job_spark.png)
 
 En esta imagen se puede ver timeline de la ejecución en el History server de Spark
 
-![History server](/img/hadoop/history_server_spark.png)
+![History server](https://www.writecode.es/img/hadoop/history_server_spark.png)
 
 Con esto estaría todo. Como hemos podido ver, teniendo un cluster Hadoop, incluir Spark para que ejecute trabajos dentro del cluster es bastante sencillo. Spark nos ofrece una velocidad de procesamiento muy superior a las operaciones de MapReduce de hadoop.
