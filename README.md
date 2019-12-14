@@ -113,10 +113,10 @@ MAINTAINER irm
 WORKDIR /root
 
 # install Spark
-RUN wget http://apache.rediris.es/spark/spark-2.4.2/spark-2.4.2-bin-hadoop2.7.tgz && \
-    tar -xvf spark-2.4.0-bin-hadoop2.7.tgz && \
-    mv spark-2.4.0-bin-hadoop2.7 /usr/local/spark && \
-    rm spark-2.4.0-bin-hadoop2.7.tgz
+RUN wget http://apache.rediris.es/spark/spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz && \
+    tar -xvf spark-2.4.4-bin-hadoop2.7.tgz && \
+    mv spark-2.4.4-bin-hadoop2.7 /usr/local/spark && \
+    rm spark-2.4.4-bin-hadoop2.7.tgz
 
 ENV PATH=$PATH:/usr/local/spark/bin
 ENV SPARK_HOME=/usr/local/spark
